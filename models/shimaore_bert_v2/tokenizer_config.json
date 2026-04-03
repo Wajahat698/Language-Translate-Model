@@ -1,0 +1,36 @@
+{
+  "cls_token": "[CLS]",
+  "do_basic_tokenize": true,
+  "do_lower_case": false,
+  "mask_token": "[MASK]",
+  "model_max_length": 512,
+  "never_split": null,
+  "pad_to_max_length": false,
+  "sep_token": "[SEP]",
+  "strip_accents": null,
+  "tokenize_chinese_chars": false,
+  "tokenizer_class": "ShimaoreBertTokenizer",
+  "unk_token": "[UNK]",
+  "bos_token": "[CLS]",
+  "eos_token": "[SEP]",
+  "source_lang": "shi",
+  "target_lang": "fr",
+  "special_language_tokens": {
+    "shimaore": "[SHI]",
+    "french": "[FR]"
+  },
+  "shimaore_specific_tokens": [
+    "ng", "ndr", "ndz", "ny", "ts", "dz", "mb", "nd",
+    "ɓ", "ɗ", "ŋ", "ɛ", "ɔ", "â", "ê", "î", "ô", "û"
+  ],
+  "version": "1.0",
+  "added_tokens_decoder": {
+    "0": {"content": "[PAD]", "single_word": false, "lstrip": false, "rstrip": false, "normalized": false, "special": true},
+    "100": {"content": "[UNK]", "single_word": false, "lstrip": false, "rstrip": false, "normalized": false, "special": true},
+    "101": {"content": "[CLS]", "single_word": false, "lstrip": false, "rstrip": false, "normalized": false, "special": true},
+    "102": {"content": "[SEP]", "single_word": false, "lstrip": false, "rstrip": false, "normalized": false, "special": true},
+    "103": {"content": "[MASK]", "single_word": false, "lstrip": false, "rstrip": false, "normalized": false, "special": true},
+    "32100": {"content": "[SHI]", "single_word": false, "lstrip": true, "rstrip": false, "normalized": false, "special": true},
+    "32101": {"content": "[FR]", "single_word": false, "lstrip": true, "rstrip": false, "normalized": false, "special": true}
+  }
+}

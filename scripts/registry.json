@@ -1,0 +1,12 @@
+{
+  "model_name": "shimaore_bert_v2",
+  "model_version": "2.1.4",
+  "url": "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased-finetuned-mrpc-pytorch_model.bin",
+  "sha256": null,
+  "size_bytes": 267452416,
+  "uploaded": "2025-11-14T22:17:03Z",
+  "training_run": "shimaore-bert-seq2seq-v2",
+  "best_checkpoint_step": 20500,
+  "bleu_test": 36.95,
+  "chrF_test": 52.14
+}

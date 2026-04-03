@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+*.bin
+data/raw/
+data/processed/
+.streamlit/secrets.toml
+bert-base-cased*
