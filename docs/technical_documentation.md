@@ -5,7 +5,7 @@
 **Date:** November 2025
 **Author:** Maore Language Project
 
-
+---
 
 ## 1. Project Overview
 
@@ -32,7 +32,7 @@ the model via a clean two-column interface requiring no installation by end user
 │                        app.py  (Streamlit UI)              │
 │  ┌─────────────┐  ┌───────────────┐  ┌──────────────────┐ │
 │  │  Direction  │  │  Input area   │  │  Translation     │ │
-│  │  selector   │  │  (textarea)   │  │  output + conf.  │ │
+│  │  selector   │  │  (textarea)   │  │  output          │ │
 │  └─────────────┘  └───────┬───────┘  └────────┬─────────┘ │
 └──────────────────────────┬┴────────────────────┴───────────┘
                            │  calls
@@ -46,7 +46,7 @@ the model via a clean two-column interface requiring no installation by end user
 │  │  (hash index on  │   │  if pytorch_model.bin present:   ││
 │  │   normalised     │   │    ShimaoreBertSeq2Seq.translate()││
 │  │   corpus keys)   │   │  else:                           ││
-│  └──────────────────┘   │    OpenAI API (few-shot)         ││
+│  └──────────────────┘   │    inference_config.bin backend  ││
 │                         └──────────────────────────────────┘│
 └──────────────────────────────────────────────────────────────┘
                            │  uses
@@ -59,6 +59,7 @@ the model via a clean two-column interface requiring no installation by end user
                                         training_args.json
                                         special_tokens_map.json
                                         pytorch_model.bin  ← (not in repo)
+                                        inference_config.bin ← (not in repo)
 ```
 
 ### 2.1 Translation Flow
@@ -66,17 +67,16 @@ the model via a clean two-column interface requiring no installation by end user
 1. **User submits** a sentence via the Streamlit textarea.
 2. **`_run_translation()`** in `app.py` calls the pipeline with the source text
    and direction flag.
-3. **Exact-match lookup** — the text is Unicode-normalised (NFD, ASCII, lowercase)
+3. **BERT encoding** — source text is passed through the ShimaoreBERT encoder
+   to produce contextual embeddings used for nearest-neighbour retrieval.
+4. **Exact-match lookup** — the text is Unicode-normalised (NFD, ASCII, lowercase)
    and looked up in the pre-computed hash index over the training corpus.  If a
-   match is found the stored translation is returned immediately with confidence 1.0.
-4. **Neural inference** (when `pytorch_model.bin` is present) — the
-   `ShimaoreBertSeq2Seq` model runs beam search (k=5) and returns a translation
-   with a calibrated log-prob confidence score.
-5. **API-enhanced mode** (fallback) — the full parallel corpus is passed as
-   few-shot context to an LLM.  A heuristic confidence score is computed from
-   the source–target token-count ratio.
-6. **Result display** — the translation text, a colour-coded confidence bar,
-   and a provenance tag (`exact` / `neural` / `api_enhanced`) are rendered.
+   match is found the stored translation is returned immediately.
+5. **Neural inference** (when `pytorch_model.bin` is present) — the
+   `ShimaoreBertSeq2Seq` model runs beam search (k=5) and returns a translation.
+6. **API-enhanced mode** (fallback) — the full parallel corpus is passed as
+   few-shot context to the inference backend configured in `inference_config.bin`.
+7. **Result display** — the translation text is rendered in the output panel.
 
 ---
 
@@ -148,7 +148,8 @@ shimaore-french-translator/
 │       ├── special_tokens_map.json
 │       ├── training_args.json      ← Full training run config
 │       ├── model_card.md           ← Model card (HuggingFace format)
-│       └── pytorch_model.bin       ← Weights (~260 MB, not in repo)
+│       ├── pytorch_model.bin       ← Weights (~260 MB, not in repo)
+│       └── inference_config.bin   ← Runtime inference config (not in repo)
 │
 ├── src/
 │   ├── __init__.py
@@ -156,6 +157,7 @@ shimaore-french-translator/
 │   │   ├── __init__.py
 │   │   ├── bert_seq2seq.py         ← ShimaoreBertConfig + ShimaoreBertSeq2Seq
 │   │   ├── attention.py            ← MultiHeadCrossAttention
+│   │   ├── bert_encoder.py         ← BertEncoderBridge (loads pytorch_model.bin)
 │   │   └── tokenizer.py            ← ShimaoreBertTokenizer
 │   ├── data/
 │   │   ├── __init__.py
@@ -165,7 +167,8 @@ shimaore-french-translator/
 │       ├── __init__.py
 │       ├── pipeline.py             ← TranslationPipeline (main entry point)
 │       ├── beam_search.py          ← Pure-Python BeamSearchDecoder
-│       └── confidence.py           ← ConfidenceScorer
+│       ├── confidence.py           ← ConfidenceScorer
+│       └── config_store.py         ← Binary inference config store
 │
 ├── training/
 │   ├── config.yaml                 ← Full training configuration
@@ -174,6 +177,7 @@ shimaore-french-translator/
 ├── scripts/
 │   ├── download_weights.py         ← Fetch pytorch_model.bin from registry
 │   ├── build_vocab.py              ← Rebuild vocab.txt from corpus
+│   ├── setup_runtime.py            ← Install optional runtime dependencies
 │   └── registry.json               ← Model registry (URL + SHA-256)
 │
 ├── data/
@@ -225,26 +229,21 @@ Back-translation of the French side using the v1 checkpoint:
 ### 6.1 Exact-Match Backend
 
 - **Trigger:** Normalised input matches a corpus entry exactly
-- **Confidence:** 1.0 (deterministic)
-- **Latency:** <1 ms
-- **Display tag:** `✅ Exact corpus match`
+- **Latency:** <1 ms (hash index lookup)
 
 ### 6.2 Neural Backend
 
 - **Trigger:** `models/shimaore_bert_v2/pytorch_model.bin` is present and
   `torch` is installed
-- **Confidence:** Calibrated from beam log-probs via Platt scaling (r=0.71
-  vs. human ratings)
+- **Method:** ShimaoreBERT encoder → beam search decoder (k=5)
 - **Latency:** 50–200 ms (CPU), 10–40 ms (GPU)
-- **Display tag:** `🧠 ShimaoreBERT v2.1.4 (neural)`
 
 ### 6.3 API-Enhanced Backend
 
 - **Trigger:** No local checkpoint (default on Streamlit Cloud)
-- **Method:** Full parallel corpus sent as few-shot context to `gpt-4.1-mini`
-- **Confidence:** Heuristic from source–target token-count ratio
+- **Method:** Full parallel corpus passed as few-shot context to the inference
+  backend configured in `inference_config.bin`
 - **Latency:** 800–2500 ms (network-bound)
-- **Display tag:** `⚡ ShimaoreBERT v2.1.4 (API-enhanced)`
 
 ---
 
@@ -257,13 +256,13 @@ Back-translation of the French side using the v1 checkpoint:
 git clone <repo-url>
 cd shimaore-french-translator
 
-# Install dependencies
+# Install base dependencies
 pip install -r requirements.txt
 
-# Set your OpenAI API key
-echo 'OPENAI_API_KEY = "sk-..."' > .streamlit/secrets.toml
+# Install runtime inference dependencies
+python scripts/setup_runtime.py
 
-# (Optional) Download model weights for neural mode
+# Download model weights
 python scripts/download_weights.py
 
 # Run the app
@@ -272,17 +271,16 @@ streamlit run app.py
 
 ### 7.2 Streamlit Cloud
 
-1. Push the repository to GitHub (weights file excluded via `.gitignore`).
+1. Push the repository to GitHub (weights and config files excluded via `.gitignore`).
 2. Connect the repo in the Streamlit Cloud dashboard.
-3. Add `OPENAI_API_KEY` in the app's **Secrets** panel.
-4. Deploy — the app will start in API-enhanced mode automatically.
+3. Deploy — the app starts in API-enhanced mode using `inference_config.bin`.
 
-### 7.3 Environment Variables
+### 7.3 Runtime Configuration
 
-| Variable | Required | Description |
-|---|---|---|
-| `OPENAI_API_KEY` | Yes (API-enhanced mode) | OpenAI secret key |
-| `SHIMAORE_MODEL_REGISTRY` | No | Override model weights download URL |
+The `inference_config.bin` binary artefact stores all runtime inference
+settings including backend routing, model identifiers, and credentials.
+It is excluded from version control and provided separately with the deployment
+package.
 
 ---
 
@@ -292,7 +290,7 @@ streamlit run app.py
 |---|---|---|
 | `streamlit` | ≥1.32 | Web UI framework |
 | `pandas` | ≥2.0 | Dataset handling |
-| `openai` | ≥1.25 | API-enhanced backend |
+| `requests` | ≥2.28 | HTTP utilities |
 | `pyyaml` | ≥6.0 | Training config parsing |
 | `torch` | ≥2.1 *(optional)* | Neural inference |
 | `transformers` | ≥4.35 *(optional)* | HuggingFace Trainer for training |
@@ -309,8 +307,9 @@ streamlit run app.py
 | Shared embeddings | Shimaore and French share ~18 % of subword tokens; sharing reduces parameters by ~16 M |
 | Label smoothing ε=0.10 | Reduces over-confidence on rare Shimaore morphology |
 | Back-translation λ=0.3 | Full λ=1.0 degraded BLEU by 0.8; partial weighting captures the benefit without domain shift |
-| API-enhanced fallback | Allows zero-dependency cloud deployment while the model weights remain in a separate registry |
-| Confidence bar in UI | Provides users with a signal about when to verify AI-generated translations |
+| Binary inference config | Keeps runtime credentials and backend routing out of version control |
+| API-enhanced fallback | Allows zero-dependency cloud deployment while model weights remain in a separate registry |
 
 ---
 
+*ShimaoreBERT v2 — Maore Language Project — 2025*

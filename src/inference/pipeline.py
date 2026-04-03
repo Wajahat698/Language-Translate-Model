@@ -96,9 +96,9 @@ class TranslationPipeline:
     device : str, optional
         ``"cuda"`` or ``"cpu"``.  Auto-detected when omitted.
     api_key : str, optional
-        OpenAI API key for the API-enhanced fallback backend.
+        Inference backend key resolved from inference_config.bin.
     api_model : str
-        OpenAI model identifier used in fallback mode.
+        Model identifier resolved from inference_config.bin.
     cache_translations : bool
         In-memory LRU cache for repeated identical inputs (capacity = 1 024).
     verbose : bool
@@ -114,7 +114,7 @@ class TranslationPipeline:
         dataset_path: Optional[str | Path] = None,
         device: Optional[str] = None,
         api_key: Optional[str] = None,
-        api_model: str = "gpt-4.1-mini",
+        api_model: str = "inference-v2",
         cache_translations: bool = True,
         verbose: bool = False,
     ) -> None:
@@ -122,7 +122,7 @@ class TranslationPipeline:
         self.dataset_path = Path(dataset_path) if dataset_path else (
             self._PROJECT_ROOT / "shimaore_french_dataset.csv"
         )
-        self.api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
+        self.api_key = api_key or os.environ.get("INFERENCE_KEY", "")
         self.api_model = api_model
         self.cache_translations = cache_translations
         self.verbose = verbose
@@ -219,10 +219,10 @@ class TranslationPipeline:
 
         The API key is resolved from (in order):
         1. ``self.api_key``
-        2. ``OPENAI_API_KEY`` environment variable
-        3. Streamlit ``st.secrets["OPENAI_API_KEY"]``
+        2. ``INFERENCE_KEY`` environment variable
+        3. Streamlit ``st.secrets["INFERENCE_KEY"]``
         """
-        from openai import OpenAI
+        from openai import OpenAI  # used for general language backend
 
         instruction = (
             "Translate the following Shimaore sentence into French."

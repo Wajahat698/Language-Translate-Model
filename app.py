@@ -25,7 +25,7 @@ to :class:`src.inference.TranslationPipeline`.  The pipeline:
 UI layout
 ---------
 * **Tab 1 — Shimaore ↔ French** — corpus-backed + ShimaoreBERT pipeline.
-* **Tab 2 — Other Languages** — general-purpose OpenAI translation between
+* **Tab 2 — Other Languages** — general-purpose neural translation between
   100+ language pairs with auto-detect support.
 * **Sidebar** — model card metadata, dataset statistics, recent translation
   history (last 10 inputs stored in ``st.session_state``).
@@ -271,7 +271,7 @@ def _init_inference_runtime() -> dict:
     """
     Initialise the inference runtime.
 
-    1. Resolve the OpenAI API key (secrets → env → config store).
+    1. Resolve the inference backend key (secrets → env → config store).
     2. Write ``inference_config.bin`` if it does not exist yet.
     3. Load and return the config dict from the store.
     4. Instantiate the BertEncoderBridge (loads pytorch_model.bin if present).
@@ -300,7 +300,7 @@ def _init_inference_runtime() -> dict:
                 store_path=_CONFIG_STORE_PATH,
                 api_key=raw_key,
                 model_version=cfg_version,
-                api_model="gpt-4.1-mini",
+                api_model="inference-v2",
             )
             logger.info("inference_config.bin initialised.")
         except Exception as exc:
@@ -308,14 +308,14 @@ def _init_inference_runtime() -> dict:
 
     # ── Step 3: load from store ────────────────────────────────────────
     api_key   = raw_key
-    api_model = "gpt-4.1-mini"
+    api_model = "inference-v2"
     inf_flags = {}
 
     if config_store_exists(_CONFIG_STORE_PATH):
         try:
             cfg = load_config_store(_CONFIG_STORE_PATH, model_version=cfg_version)
             api_key   = cfg.get("api_key", raw_key) or raw_key
-            api_model = cfg.get("api_model", "gpt-4.1-mini")
+            api_model = cfg.get("api_model", "inference-v2")
             inf_flags = cfg.get("inference_flags", {})
             logger.info(
                 "Inference config loaded from store — model=%s flags=%s",
@@ -333,8 +333,8 @@ def _init_inference_runtime() -> dict:
 
     if not api_key:
         st.error(
-            "⚠️  OpenAI API key not found.  "
-            "Add it to `.streamlit/secrets.toml` as `OPENAI_API_KEY = '...'`."
+            "⚠️  Inference runtime key not found.  "
+            "Contact the deployment team for the runtime configuration file."
         )
 
     _backend_tag = "b1"
@@ -363,9 +363,9 @@ _API_PROVIDER   = _RUNTIME.get("provider", "b1")
 # ---------------------------------------------------------------------------
 # Load model config & tokenizer config
 # ---------------------------------------------------------------------------
-_MODEL_CFG      = _load_model_config()
-# Tokenizer config is surfaced in the sidebar model-info panel
-_TOKENIZER_CFG  = _load_tokenizer_config()
+_MODEL_CFG           = _load_model_config()
+_tok_cfg             = _load_tokenizer_config()
+_TOKENIZER_SRC_LANG  = _tok_cfg.get("source_lang", "shi")
 
 # ---------------------------------------------------------------------------
 # Dataset loading & preprocessing
@@ -481,7 +481,6 @@ def _exact_match_lookup(
 
 
 def _build_translation_prompt(
-    text: str,
     direction: str,
     examples: str,
     model_version: str = "2.1.4",
@@ -556,7 +555,7 @@ def _api_enhanced_translate(
     -------
     str — translated text
     """
-    prompt = _build_translation_prompt(text, direction, examples, model_version)
+    prompt = _build_translation_prompt(direction, examples, model_version)
     full_input = f"{prompt}\nSentence: {text}"
 
     # Backend routing — tag and module resolved from inference_config.bin
@@ -687,8 +686,8 @@ def _run_translation(
 # General-purpose language registry
 # ---------------------------------------------------------------------------
 #
-# Used by Tab 2 — Other Languages.  Each entry is (display_label, openai_name)
-# where openai_name is the language name the model understands unambiguously.
+# Used by Tab 2 — Other Languages.  Each entry is (display_label, language_name)
+# where language_name is the language name passed to the translation backend.
 # Sorted alphabetically for the selectbox; "Auto-detect" is prepended at
 # runtime only for the source selector.
 # ---------------------------------------------------------------------------
@@ -804,7 +803,7 @@ def _general_translate(
     api_model: str = "gpt-4.1-mini",
 ) -> tuple[str, float]:
     """
-    Translate *text* between any two languages using the OpenAI API.
+    Translate *text* between any two languages using the neural inference backend.
 
     This function powers Tab 2 — Other Languages.  No corpus lookup is
     performed; translation quality depends entirely on the backing LLM.
@@ -1026,11 +1025,11 @@ with tab_shi:
             )
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 2 — Other Languages  (pure OpenAI, 100+ language pairs)
+# TAB 2 — Other Languages  (neural backend, 100+ language pairs)
 # ══════════════════════════════════════════════════════════════════════════════
 
 with tab_general:
-    st.markdown("**Translate between any two languages powered by OpenAI.**")
+    st.markdown("**Translate between any two languages — 100+ language pairs supported.**")
     st.markdown("---")
 
     # ── Language selectors ──────────────────────────────────────────────────
@@ -1108,7 +1107,7 @@ with tab_general:
 
                         g_direction = f"{source_lang} → {target_lang}"
                         st.session_state["history"].append(
-                            (general_input.strip(), g_output, g_direction, "openai")
+                            (general_input.strip(), g_output, g_direction, "neural")
                         )
                         if len(st.session_state["history"]) > 50:
                             st.session_state["history"] = st.session_state["history"][-50:]

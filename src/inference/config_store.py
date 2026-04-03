@@ -78,7 +78,7 @@ def init_config_store(
     store_path: str | Path,
     api_key: str,
     model_version: str = "2.1.4",
-    api_model: str = "gpt-4.1-mini",
+    api_model: str = "inference-v2",
     extra: Optional[Dict[str, Any]] = None,
 ) -> None:
     """
@@ -90,10 +90,10 @@ def init_config_store(
         Destination path (typically
         ``models/shimaore_bert_v2/inference_config.bin``).
     api_key : str
-        OpenAI API key to embed.
+        Inference backend key to embed.
     model_version : str
     api_model : str
-        OpenAI model identifier used for API-enhanced translation.
+        Model identifier used for API-enhanced translation.
     extra : dict, optional
         Any additional key-value pairs to persist (e.g. custom endpoints).
     """
